@@ -3,7 +3,7 @@
 
 // -=-=-=-=-=-=- Uncomment the platform you're building for -=-=-=-=-=-=-
 // #define STICK_C_PLUS
-// #define STICK_C_PLUS2
+#define STICK_C_PLUS2
 // #define STICK_C
 // #define CARDPUTER
 // -=-=- Uncommenting more than one at a time will result in errors -=-=-
@@ -23,15 +23,13 @@ uint16_t FGCOLOR=0xFFF1; // placeholder
 #endif
 
 #if !defined(CARDPUTER) && !defined(STICK_C_PLUS2) && !defined(STICK_C_PLUS) && !defined(STICK_C)
-  #define CARDPUTER
+  #define STICK_C_PLUS2
 #endif
 
 #if !defined(LANGUAGE_EN_US) && !defined(LANGUAGE_PT_BR) && !defined(LANGUAGE_IT_IT) && !defined(LANGUAGE_FR_FR)
   #define LANGUAGE_EN_US
 #endif
 
-// -=-=- DEAUTHER -=-  @bmorcelli -=-=- | Discord: Pirata#5263 bmorcelli
-#define DEAUTHER  //Need to make some changes in arduino IDE, refer to https://github.com/bmorcelli/m5stickC_Plus2-nemo/tree/main/DEAUTH%20Prerequisites
 
 
 #if defined(STICK_C_PLUS)
@@ -80,7 +78,7 @@ uint16_t FGCOLOR=0xFFF1; // placeholder
   #define ROTATION
   #define USE_EEPROM
   #define RTC      //TODO: plus2 has a BM8563 RTC but the class isn't the same, needs work.
-  #define SDCARD   //Requires a custom-built adapter
+  // #define SDCARD   //Requires a custom-built adapter - Disabled to reduce IRAM usage
   #define PWRMGMT
   #define SPEAKER M5.Speaker
   //#define SONG
@@ -129,36 +127,6 @@ uint16_t FGCOLOR=0xFFF1; // placeholder
   #define M5LED_OFF HIGH
 #endif
 
-#if defined(CARDPUTER)
-  #include <M5Cardputer.h>
-  // -=-=- Display -=-=-
-  String platformName="Cardputer";
-  #define BIG_TEXT 4
-  #define MEDIUM_TEXT 3
-  #define SMALL_TEXT 2
-  #define TINY_TEXT 1
-  // -=-=- FEATURES -=-=-
-  #define KB
-  #define HID
-  #define ACTIVE_LOW_IR
-  #define USE_EEPROM
-  #define SDCARD
-  //#define SONG
-  // -=-=- ALIASES -=-=-
-  #define DISP M5Cardputer.Display
-  #define IRLED 44
-  #define BACKLIGHT 38
-  #define MINBRIGHT 165
-  #define SPEAKER M5Cardputer.Speaker
-  #define BITMAP M5Cardputer.Display.drawBmp(NEMOMatrix, 97338)
-  #define SD_CLK_PIN 40
-  #define SD_MISO_PIN 39
-  #define SD_MOSI_PIN 14
-  #define SD_CS_PIN 12
-  #define VBAT_PIN 10
-  #define M5LED_ON LOW
-  #define M5LED_OFF HIGH
-#endif
 
 // -=-=-=-=-=- LIST OF CURRENTLY DEFINED FEATURES -=-=-=-=-=-
 // M5LED      - A visible LED (Red) exposed on this pin number
@@ -197,16 +165,13 @@ uint16_t FGCOLOR=0xFFF1; // placeholder
 // 15 - Wifi scan results
 // 16 - Bluetooth Spam Menu
 // 17 - Bluetooth Maelstrom
-// 18 - QR Codes
 // 19 - NEMO Portal
 // 20 - Attack menu
-// 21 - Deauth Attack
 // 22 - Custom Color Settings
 // 23 - Pre-defined color themes
 // 24 - Deauth Hunter
 // 25 - BLE Hunter
 // 26 - PineAP Hunter
-// 27 - BadUSB Hunter (CARDPUTER only)
 // 29 - BLE Hunter RSSI Setting
 // 30 - Deauth Hunter RSSI Setting
 // 31 - BLE Hunter Alert Packets Setting
@@ -246,7 +211,6 @@ bool swiftPair = false;     // Internal flag to place AppleJuice into Swift Pair
 bool androidPair = false;   // Internal flag to place AppleJuice into Android Pair random packet Mode
 bool maelstrom = false;     // Internal flag to place AppleJuice into Bluetooth Maelstrom mode
 bool portal_active = false; // Internal flag used to ensure NEMO Portal exits cleanly
-bool activeQR = false; 
 const byte PortalTickTimer = 1000;
 String apSsidName = String("");
 bool isSwitching = true;
@@ -255,14 +219,10 @@ bool isSwitching = true;
 #else
   int current_proc = 1; // Start in Main Menu mode if no RTC
 #endif
-// DEAUTH vars
+// WiFi vars
 uint8_t channel;
 String apMac = String("");
-bool target_deauth_flg = false;
-bool target_deauth = false;
-int deauth_tick = 0;        // used to delay the deauth packets when combined to Nemo Portal
 bool clone_flg = false;
-// DEAUTH end
 float bh_max_rssi = -40;
 int bh_pkts = 0;
 float dh_max_rssi = -20;
@@ -279,40 +239,24 @@ int dh_pkts = 0;
 #include "applejuice.h"
 #include "WORLD_IR_CODES.h"
 #include "wifispam.h"
-#include "sd.h"
+#include "sdcard.h"
 #include "portal.h"
 #include "NEMOMatrix.h"
 #include "songs.h"
 #include "localization.h"
 #include <BLEUtils.h>
 #include <BLEServer.h>
-#if defined(DEAUTHER)
-  #include "deauth.h"                                                               //DEAUTH
-  #include "esp_wifi.h"                                                             //DEAUTH
-  wifi_ap_record_t ap_record;                                                       //DEAUTH
-#endif
 
 #include "deauth_hunter.h"                                                          //DEAUTH HUNTER
 #include "ble_hunter.h"                                                             //BLE HUNTER
 #include "pineap_hunter.h"                                                          //PINEAP HUNTER
-#include "badusb_hunter.h"                                                          //BADUSB HUNTER
+                                                    //BADUSB HUNTER
 struct MENU {
   char name[19];
   int command;
 };
 
 
-struct QRCODE {
-  char name[19];
-  String url;
-};
-
-QRCODE qrcodes[] = {
-  { TXT_BACK, "" },
-  { "Rickroll", "https://youtu.be/dQw4w9WgXcQ"},
-  { "HackerTyper", "https://hackertyper.net/"},
-  { "ZomboCom", "https://html5zombo.com/"},
-};
 
 
 void drawmenu(MENU thismenu[], int size) {
@@ -381,9 +325,6 @@ void switcher_button_proc() {
 void check_menu_press() {
 #if defined(AXP)
   if (M5.Axp.GetBtnPress()) {
-#endif
-#if defined(KB)
-  if (M5Cardputer.Keyboard.isKeyPressed(',') || M5Cardputer.Keyboard.isKeyPressed('`')){
 #endif
 #if defined(M5_BUTTON_MENU)
   if (digitalRead(M5_BUTTON_MENU) == LOW){
@@ -522,10 +463,6 @@ MENU mmenu[] = {
   { "TV-B-Gone", 13}, // We jump to the region menu first
   { "Bluetooth", 16},
   { "WiFi", 12},
-#if defined(CARDPUTER)
-  { "BadUSB Hunter", 27},
-#endif
-  { "QR Codes", 18},
   { TXT_SETTINGS, 2},
 };
 int mmenu_size = sizeof(mmenu) / sizeof(MENU);
@@ -633,9 +570,6 @@ MENU smenu[] = {
 #if defined(AXP) || defined(PWRMGMT)
   { TXT_BATT_INFO, 6},
 #endif
-#if defined(CARDPUTER)
-  { TXT_BATT_INFO, 6},
-#endif
   { TXT_BRIGHT, 4},
 #if defined(RTC)
   { TXT_SET_CLOCK, 3},
@@ -644,9 +578,7 @@ MENU smenu[] = {
   { TXT_ROTATION, 7},
 #endif
 #if defined(SDCARD)
-  #ifndef CARDPUTER
     { TXT_SDCARD, 97},
-  #endif
 #endif
   { "BH RSSI", 29},
   { "DH RSSI", 30},
@@ -865,10 +797,11 @@ MENU thmenu[] = {
   { "Bill", 3},
   { "Steve", 4},
   { "Lilac", 5},
-  { "Contrast", 6},
+  { "YellowOnBlack", 6},
   { "NightShift", 7},
   { "Camo", 8},
   { "BubbleGum", 9},
+  { "Contrast", 10},
   { TXT_COLOR, 99},
 };
 int thmenu_size = sizeof(thmenu) / sizeof (MENU);
@@ -915,22 +848,26 @@ void theme_loop() {
         FG=19;
         BG=6;
         break;
-      case 6: // Contrast
-        FG=16;
-        BG=1;
-        break;
-      case 7: // NightShift
-        FG=5;
-        BG=1;
-         break;
-      case 8: // Camo
-        FG=1;
-        BG=7;
-        break;
-      case 9: // BubbleGum
-        FG=1;
-        BG=19;
-        break;
+        case 6: // YellowOnBlack
+          FG=15;
+          BG=1;
+          break;
+          case 7: // NightShift
+          FG=5;
+          BG=1;
+          break;
+          case 8: // Camo
+          FG=1;
+          BG=7;
+          break;
+          case 9: // BubbleGum
+          FG=1;
+          BG=19;
+          break;
+          case 10: // Contrast
+            FG=16;
+            BG=1;
+            break;
       case 99:
         FG=11;
         BG=1;
@@ -1119,48 +1056,6 @@ void battery_drawmenu(int battery, float voltage_b = 0, float voltage_c = 0) {
     old_battery = battery;
   }
 #endif // AXP
-
-#if defined(CARDPUTER)
-  uint8_t oldBattery = 0;
-
-  void battery_setup() {
-    rstOverride = false;
-    pinMode(VBAT_PIN, INPUT);
-    uint8_t battery = ((((analogRead(VBAT_PIN)) - 1842) * 100) / 738);
-    battery_drawmenu(battery);
-    delay(500); // Prevent switching after menu loads up
-    /*
-      Used minimum 3,0V and maximum 4,2V for battery. So it may show wrong values. Needs testing.
-      It only shows decent values when disconnected from charger, due to HW limitations.
-      Equation: Bat% = ((Vadc - 1842) / (2580 - 1842)) * 100. Where: 4,2V = 2580, 3,0V = 1842.
-    */
-  }
-
-  void battery_loop() {
-    // Read 30 battery values to calculate the average (avoiding unprecise and close values)
-    uint16_t batteryValues = 0;
-    for(uint8_t i = 0; i < 30; i++) { // 30 iterations X 100ms = 3 seconds for each refresh
-      delay(100);
-      batteryValues += ((((analogRead(VBAT_PIN)) - 1842) * 100) / 738);
-      M5Cardputer.update();
-      if(M5Cardputer.Keyboard.isChange() && M5Cardputer.Keyboard.isPressed()) { // If any key is pressed
-        rstOverride = false;
-        isSwitching = true;
-        current_proc = 1;
-        break;
-      }
-    }
-
-    if(!isSwitching) { // If is not switching, calculate battery average
-      uint8_t battery = batteryValues / 30; // Iteration times
-      Serial.printf("Battery Level: %d\n", battery);
-      if(battery != oldBattery) { // Only draw a new screen if value is different
-        oldBattery = battery;
-        battery_drawmenu(battery);
-      }
-    }
-  }
-#endif // Cardputer
 
 /// TV-B-GONE ///
 void tvbgone_setup() {
@@ -1812,7 +1707,7 @@ void aj_adv(){
 /// CREDITS ///
 void credits_setup(){
   DISP.fillScreen(WHITE);
-  DISP.qrcode("https://github.com/n0xa/m5stick-nemo", 145, 22, 100, 5);
+  // QR code removed to save IRAM
   DISP.setTextColor(BLACK, WHITE);
   DISP.setTextSize(MEDIUM_TEXT);
   DISP.setCursor(0, 10);
@@ -2131,9 +2026,7 @@ void wscan_result_loop(){
    if(check_select_press()){
       apMac=WiFi.BSSIDstr(cursor);
       apSsidName=WiFi.SSID(cursor);
-      channel = static_cast<uint8_t>(WiFi.channel(cursor));                            // DEAUTH - save channel
-      uint8_t* bssid = WiFi.BSSID(cursor);                                             // DEAUTH - save BSSID (AP MAC)
-      memcpy(ap_record.bssid, bssid, 6);                                               // DEAUTH - cpy bssid to memory
+      channel = static_cast<uint8_t>(WiFi.channel(cursor));                            // WiFi - save channel
       rstOverride = false;
       current_proc = 20;
       isSwitching = true;
@@ -2170,10 +2063,6 @@ void wscan_loop(){
 MENU wsAmenu[] = {
   { TXT_BACK, 5},
   { TXT_WFA_PORTAL, 0},
-  #if defined(DEAUTHER)
-    { TXT_WFA_DEAUTH, 1},
-    { TXT_WFA_COMBINED, 2},
-  #endif
 };
 int wsAmenu_size = sizeof(wsAmenu) / sizeof (MENU);
 
@@ -2200,26 +2089,8 @@ void wsAmenu_loop() {
         rstOverride = false;
         isSwitching = true;
         clone_flg=true;
-        target_deauth_flg=false;
         current_proc = 19;
         break;
-      #if defined (DEAUTHER)
-        case 1:                     //Go to Deauth
-          rstOverride = false;
-          isSwitching = true;
-          target_deauth_flg=false;
-          target_deauth=true;
-          current_proc = 21;                                                                 // iserir codigo do deauth aqui
-          break;
-        case 2:                     //Go to Nemo with Deauth
-          rstOverride = false;
-          isSwitching = true;
-          clone_flg=true;
-          target_deauth_flg=true;
-          target_deauth=true;
-          current_proc = 19;
-          break;
-      #endif
       case 5:                     //Exit
         current_proc = 14;
         break;
@@ -2228,70 +2099,6 @@ void wsAmenu_loop() {
 }
 
 // WIFI-Attack MENU and functions END
-// DEAUTH ATTACK START
-#if defined(DEAUTHER)
-  void deauth_setup(){
-    // Start the Access point service as Hidden
-    WiFi.mode(WIFI_AP);
-    WiFi.softAP(apSsidName, emptyString, channel, 1, 4, false);
-    IPAddress apIP = WiFi.softAPIP();
-
-
-    DISP.fillScreen(BGCOLOR);
-    DISP.setCursor(0, 0);
-    DISP.setTextSize(BIG_TEXT);
-    DISP.setTextColor(TFT_RED, BGCOLOR);
-    DISP.println("Deauth Atk");
-    DISP.setTextSize(SMALL_TEXT);
-    DISP.setTextColor(FGCOLOR, BGCOLOR);
-    DISP.print("\nSSID: " + apSsidName);
-    DISP.print("\n");
-    DISP.printf(TXT_WF_CHANN, channel);
-    DISP.print("> " + apMac);
-    memcpy(deauth_frame, deauth_frame_default, sizeof(deauth_frame_default));
-    wsl_bypasser_send_deauth_frame(&ap_record, channel);                                        // DEAUTH CREATE FRAME
-
-    cursor = 0;
-    rstOverride = false;
-    delay(500); // Prevent switching after menu loads up
-  }
-  void deauth_loop(){
-
-    if (target_deauth == true) {                                                                 // DEAUTH
-      wsl_bypasser_send_raw_frame(deauth_frame, sizeof(deauth_frame_default));                   // DEAUTH SEND FRAME
-      DISP.setTextSize(SMALL_TEXT);                                                              // DEAUTH
-      DISP.setTextColor(TFT_RED, BGCOLOR);                                                       // DEAUTH
-      DISP.setCursor(1, 115);                                                                    // DEAUTH
-      DISP.println(TXT_DEAUTH_STOP);                                                             // DEAUTH
-      DISP.setTextColor(FGCOLOR, BGCOLOR);                                                       // DEAUTH
-    } else{                                                                                      // DEAUTH
-      DISP.setTextSize(SMALL_TEXT);                                                              // DEAUTH
-      DISP.setTextColor(TFT_RED, BGCOLOR);                                                       // DEAUTH
-      DISP.setCursor(1, 115);                                                                    // DEAUTH
-      DISP.println(TXT_DEAUTH_START);                                                            // DEAUTH
-      DISP.setTextColor(FGCOLOR, BGCOLOR);                                                       // DEAUTH
-    }                                                                                            // DEAUTH
-
-    delay(100); //from 200
-
-    if (check_select_press()){                                                                    // DEAUTH
-      target_deauth = !target_deauth;                                                             // DEAUTH
-      DISP.setCursor(1, 115);                                                                     // DEAUTH
-      DISP.println("......................");                                                     // DEAUTH
-      delay(500);                                                                                 // DEAUTH
-    }                                                                                             // DEAUTH
-
-    if (check_next_press()){
-      WiFi.mode(WIFI_MODE_STA);
-      rstOverride = false;
-      isSwitching = true;
-      target_deauth = false;                                                                      // DEAUTH
-      current_proc = 12;
-      delay(500);
-    }
-  }
-  // DEAUTH attack END
-#endif
 void bootScreen(){
   // Boot Screen
   #ifdef SONG
@@ -2308,70 +2115,9 @@ void bootScreen(){
   DISP.setCursor(10, 30);
   DISP.setTextSize(SMALL_TEXT);
   DISP.printf("%s-%s\n",NEMO_VERSION,platformName);
-#if defined(CARDPUTER)
-  DISP.println(TXT_INST_NXT);
-  DISP.println(TXT_INST_PRV);
-  DISP.println(TXT_INST_SEL);
-  DISP.println(TXT_INST_HOME);
-  delay(1500);
-  DISP.println(TXT_INST_PRSS_KEY);
-  while(true){
-    M5Cardputer.update();
-    if (M5Cardputer.Keyboard.isChange()) {
-      drawmenu(mmenu, mmenu_size);
-      delay(250);
-      break;
-    }
-  }
-#else
-  DISP.println(TXT_STK_NXT);
-  DISP.println(TXT_STK_SEL);
-  DISP.println(TXT_STK_HOME);
-  delay(3000);
-#endif
+
 }
 
-void qrmenu_drawmenu() {
-  DISP.setTextSize(SMALL_TEXT);
-  DISP.fillScreen(BGCOLOR);
-  DISP.setCursor(0, 8, 1);
-  for ( int i = 0 ; i < ( sizeof(qrcodes) / sizeof(QRCODE) ) ; i++ ) {
-    DISP.print((cursor == i) ? ">" : " ");
-    DISP.println(qrcodes[i].name);
-  }
-}
-
-void qrmenu_setup() {
-  cursor = 0;
-  rstOverride = true;
-  qrmenu_drawmenu();
-  delay(500); // Prevent switching after menu loads up
-}
-
-void qrmenu_loop() {
-  if (check_next_press()) {
-    cursor++;
-    cursor = cursor % ( sizeof(qrcodes) / sizeof(QRCODE) );
-    qrmenu_drawmenu();
-    activeQR = false;
-    delay(250);
-  }
-  if (check_select_press()) {
-    if (qrcodes[cursor].url.length() < 1){
-      current_proc = 1;
-      isSwitching = true;
-    }else if ( activeQR == false ) {
-      activeQR = true;
-      DISP.fillScreen(WHITE);
-      DISP.qrcode(qrcodes[cursor].url, (DISP.width() - DISP.height()) / 2, 0, DISP.height(), 5);
-      delay(500);
-    } else {
-      isSwitching = true;
-      activeQR = false;
-      delay(250);
-    }
-  }
-}
 
 /// NEMO PORTAL
 
@@ -2382,10 +2128,6 @@ void portal_setup(){
   cursor = 0;
   rstOverride = true;
   printHomeToScreen();
-  #if defined(DEAUTHER)                                                                      // DEAUTH
-  memcpy(deauth_frame, deauth_frame_default, sizeof(deauth_frame_default));                  // DEAUTH
-  wsl_bypasser_send_deauth_frame(&ap_record, channel);                                       // DEAUTH  CREATE FRAME
-  #endif                                                                                     // DEAUTH
   delay(500); // Prevent switching after menu loads up
 }
 
@@ -2398,33 +2140,7 @@ void portal_loop(){
     }
   }
   if (clone_flg==true) {
-    #if defined(DEAUTHER)
-      if (target_deauth_flg) {
-        if (target_deauth == true) {                                                                 // DEAUTH
-          if (deauth_tick==35) {                                                                     // 35 is +-100ms   (Add delay to attack, without reflection on portal)
-            wsl_bypasser_send_raw_frame(deauth_frame, sizeof(deauth_frame_default));                 // DEAUTH   SEND FRAME
-            deauth_tick=0;
-          } else { 
-            deauth_tick=deauth_tick+1; 
-          }
-          DISP.setTextSize(SMALL_TEXT);                                                              // DEAUTH
-          DISP.setTextColor(TFT_RED, BGCOLOR);                                                       // DEAUTH
-          DISP.setCursor(1, 115);                                                                    // DEAUTH
-          DISP.println(TXT_DEAUTH_STOP);                                                             // DEAUTH
-          DISP.setTextColor(FGCOLOR, BGCOLOR);                                                       // DEAUTH
-        } else{                                                                                      // DEAUTH
-          DISP.setTextSize(SMALL_TEXT);                                                              // DEAUTH
-          DISP.setTextColor(TFT_RED, BGCOLOR);                                                       // DEAUTH
-          DISP.setCursor(1, 115);                                                                    // DEAUTH
-          DISP.println(TXT_DEAUTH_START);                                                            // DEAUTH
-          DISP.setTextColor(FGCOLOR, BGCOLOR);                                                       // DEAUTH
-        }                                                                                            // DEAUTH
-        if (check_select_press()){                                                                    // DEAUTH
-          target_deauth = !target_deauth;                                                             // DEAUTH
-          delay(500);                                                                                 // DEAUTH
-        }
-      }
-    #endif
+    // Clone portal mode active
   }
   dnsServer.processNextRequest();
   webServer.handleClient();
@@ -2432,9 +2148,7 @@ void portal_loop(){
   if (check_next_press()){
     shutdownWebServer();
     portal_active = false;
-    target_deauth_flg = false;                                                                     // DEAUTH
-    target_deauth = false;                                                                         // DEAUTH
-    clone_flg = false;                                                                             // DEAUTH
+    clone_flg = false;
     current_proc = 12;
     delay(500);
   }
@@ -2444,12 +2158,7 @@ void portal_loop(){
 /// ENTRY ///
 void setup() {
 Serial.begin(115200);
-#if defined(CARDPUTER)
-  auto cfg = M5.config();
-  M5Cardputer.begin(cfg, true);
-#else
   M5.begin();
-#endif
 #if defined(BACKLIGHT)
   pinMode(BACKLIGHT, OUTPUT); // Backlight analogWrite range ~150 - 255
 #endif
@@ -2473,11 +2182,7 @@ Serial.begin(115200);
     if(EEPROM.read(0) > 3 || EEPROM.read(1) > 240 || EEPROM.read(2) > 100 || EEPROM.read(3) > 1 || EEPROM.read(4) > 19 || EEPROM.read(5) > 19 || EEPROM.read(6) > 100 || EEPROM.read(8) > 100 || EEPROM.read(9) > 100 || EEPROM.read(10) > 100 ) {
       // Assume out-of-bounds settings are a fresh/corrupt EEPROM and write defaults for everything
       Serial.println("EEPROM likely not properly configured. Writing defaults.");
-      #if defined(CARDPUTER)
-      EEPROM.write(0, 1);    // Right rotation for cardputer
-      #else
       EEPROM.write(0, 3);    // Left rotation
-      #endif
       EEPROM.write(1, 15);   // 15 second auto dim time
       EEPROM.write(2, 100);  // 100% brightness
       EEPROM.write(3, 0);    // TVBG NA Region
@@ -2564,7 +2269,7 @@ ProcessHandler processes[] = {
 #endif
   {4, dmenu_setup, menu_controller_loop, "Display Menu"},
   {5, tvbgone_setup, tvbgone_loop, "TV-B-Gone"},
-#if defined(AXP) || defined(PWRMGMT) || defined(CARDPUTER)
+#if defined(AXP) || defined(PWRMGMT) 
   {6, battery_setup, battery_loop, "Battery Info"},
 #endif
 #if defined(ROTATION)
@@ -2580,26 +2285,19 @@ ProcessHandler processes[] = {
   {15, wscan_result_setup, wscan_result_loop, "WiFi Scan Results"},
   {16, btmenu_setup, btmenu_loop, "Bluetooth Menu"},
   {17, btmaelstrom_setup, btmaelstrom_loop, "BLE Maelstrom"},
-  {18, qrmenu_setup, qrmenu_loop, "QR Menu"},
   {19, portal_setup, portal_loop, "Captive Portal"},
   {20, wsAmenu_setup, wsAmenu_loop, "WiFi Attack Menu"},
-#if defined(DEAUTHER)
-  {21, deauth_setup, deauth_loop, "Deauth Attack"},
-#endif
   {22, color_setup, color_loop, "Color Settings"},
   {23, theme_setup, theme_loop, "Theme Settings"},
   {24, deauth_hunter_setup, deauth_hunter_loop, "Deauth Hunter"},
   {25, ble_hunter_setup, ble_hunter_loop, "BLE Hunter"},
   {26, pineap_hunter_setup, pineap_hunter_loop, "PineAP Hunter"},
-#if defined(CARDPUTER)
-  {27, badusb_hunter_setup, badusb_hunter_loop, "BadUSB Hunter"},
-#endif
   {29, bh_rssi_setup, bh_rssi_loop, "BH RSSI Setting"},
   {30, dh_rssi_setup, dh_rssi_loop, "DH RSSI Setting"}, 
   {31, bh_alert_pkts_setup, bh_alert_pkts_loop, "BH Alert Pkts Setting"},
   {32, dh_alert_pkts_setup, dh_alert_pkts_loop, "DH Alert Pkts Setting"},
   {33, ph_alert_ssids_setup, ph_alert_ssids_loop, TXT_PH_ALERT_SSIDS},
-#if defined(SDCARD) && !defined(CARDPUTER)
+#if defined(SDCARD)
   {97, nullptr, ToggleSDCard, "SD Card"},
 #endif
   {-1, nullptr, nullptr, nullptr} // Sentinel
@@ -3523,9 +3221,7 @@ void string_to_bssid(const String& bssid_str, uint8_t* bssid) {
 }
 
 void play_alert_beep() {
-    #if defined(CARDPUTER)
-      SPEAKER.tone(4000, 50);
-    #elif defined(STICK_C_PLUS2)
+    #if defined(STICK_C_PLUS2)
       SPEAKER.tone(4000, 50);
     #endif
 }
@@ -3780,357 +3476,3 @@ void ph_alert_ssids_loop() {
     delay(250);
   }
 }
-
-///////////////////////////////
-/// BADUSB HUNTER IMPLEMENTATION ///
-///////////////////////////////
-
-#if defined(CARDPUTER)
-
-// Global state for BadUSB Hunter - SIMPLIFIED, NO CALLBACKS
-static USBDeviceInfo badusb_currentDevice;
-static bool badusb_deviceConnected = false;
-static bool badusb_deviceWasConnected = false;
-static unsigned long badusb_lastBlinkTime = 0;
-static bool badusb_ledState = false;
-static usb_host_client_handle_t badusb_client_hdl = nullptr;
-static CRGB badusb_leds[BADUSB_NUM_LEDS];
-
-// USB Class code lookup
-const char* badusb_getUSBClassName(uint8_t classCode) {
-  switch(classCode) {
-    case 0x00: return "Device";
-    case 0x01: return "Audio";
-    case 0x02: return "CDC-Comm";
-    case 0x03: return "HID";
-    case 0x05: return "Physical";
-    case 0x06: return "Image";
-    case 0x07: return "Printer";
-    case 0x08: return "Mass Storage";
-    case 0x09: return "Hub";
-    case 0x0A: return "CDC-Data";
-    case 0x0B: return "Smart Card";
-    case 0x0D: return "Security";
-    case 0x0E: return "Video";
-    case 0x0F: return "Healthcare";
-    case 0x10: return "AV";
-    case 0x11: return "Billboard";
-    case 0xDC: return "Diagnostic";
-    case 0xE0: return "Wireless";
-    case 0xEF: return "Misc";
-    case 0xFE: return "App-Specific";
-    case 0xFF: return "Vendor-Spec";
-    default: return "Unknown";
-  }
-}
-
-// BadUSB Detection Heuristics
-void badusb_analyzeDevice(USBDeviceInfo* device) {
-  device->isSuspicious = false;
-  device->suspicionReason = "";
-
-  int hidCount = 0;
-
-  for (int i = 0; i < device->numInterfaces; i++) {
-    if (device->interfaceClasses[i] == 0x03) hidCount++;
-  }
-
-  // Suspicious: Multiple interfaces with at least one HID
-  if (device->numInterfaces > 1 && hidCount > 0) {
-    device->isSuspicious = true;
-    device->suspicionReason = "Multi-interface+HID";
-  }
-
-  if (hidCount > 1) {
-    device->isSuspicious = true;
-    device->suspicionReason = "Multiple HID ifaces";
-  }
-
-  // Rubber Ducky (Hak5)
-  if (device->vid == 0x03EB && device->pid == 0x2403) {
-    device->isSuspicious = true;
-    device->suspicionReason = "Hak5 Rubber Ducky";
-  }
-
-  if (device->numInterfaces == hidCount && hidCount > 0){
-    device->suspicionReason = "HID";
-    device->isSuspicious = false;
-  }
-}
-
-// Display functions
-void badusb_displayWelcome() {
-  DISP.fillScreen(BGCOLOR);
-  DISP.setCursor(0, 0);
-  DISP.setTextSize(MEDIUM_TEXT);
-  DISP.setTextColor(BGCOLOR, FGCOLOR);
-  DISP.println("BadUSB Hunter");
-  DISP.setTextSize(SMALL_TEXT);
-  DISP.setTextColor(FGCOLOR, BGCOLOR);
-  DISP.println("Insert USB device");
-  DISP.println("");
-  DISP.setTextSize(TINY_TEXT);
-  DISP.println("USB Host ready");
-  DISP.println("Next: Exit");
-}
-
-void badusb_displayDeviceInfo(USBDeviceInfo* device) {
-  DISP.fillScreen(BGCOLOR);
-  DISP.setCursor(0, 0);
-
-  DISP.setTextSize(SMALL_TEXT);
-  if (device->isSuspicious) {
-    DISP.setTextColor(TFT_RED);
-    DISP.println("!SUSPICIOUS!");
-    play_alert_beep();
-  } else if (device->suspicionReason=="HID") {
-    DISP.setTextColor(TFT_YELLOW);
-    DISP.println("HID-Only Device");
-    play_alert_beep();
-
-  } else {
-    DISP.setTextColor(TFT_GREEN);
-    DISP.println("Device OK");
-  }
-
-  DISP.setTextSize(TINY_TEXT);
-
-  DISP.setTextColor(TFT_YELLOW);
-  DISP.print("VID:PID ");
-  DISP.setTextColor(TFT_WHITE);
-  char vidpid[16];
-  sprintf(vidpid, "%04X:%04X", device->vid, device->pid);
-  DISP.println(vidpid);
-
-  DISP.setTextColor(TFT_CYAN);
-  DISP.print("Class: ");
-  DISP.setTextColor(TFT_WHITE);
-  DISP.println(badusb_getUSBClassName(device->deviceClass));
-
-  DISP.setTextColor(TFT_CYAN);
-  DISP.print("Interfaces: ");
-  DISP.setTextColor(TFT_WHITE);
-  DISP.println(device->numInterfaces);
-
-  for (int i = 0; i < device->numInterfaces && i < 8; i++) {
-    DISP.setTextColor(TFT_WHITE);
-    DISP.print("  ");
-    DISP.print(i);
-    DISP.print(": ");
-    DISP.println(badusb_getUSBClassName(device->interfaceClasses[i]));
-  }
-
-  if (device->isSuspicious) {
-    DISP.setTextSize(SMALL_TEXT);
-    DISP.println("");
-    DISP.setTextColor(TFT_RED);
-    DISP.println(device->suspicionReason);
-  }
-  
-  DISP.println("");
-  DISP.setTextSize(TINY_TEXT);
-  DISP.setTextColor(FGCOLOR, BGCOLOR);
-  DISP.println("Next: Exit");
-}
-
-void badusb_updateLED() {
-  if (!badusb_deviceConnected) {
-    if (badusb_leds[0] != CRGB::Black) {
-      badusb_leds[0] = CRGB::Black;
-      FastLED.show();
-    }
-    badusb_ledState = false;
-  } else {
-    bool isHID = false;
-    for (int i = 0; i < badusb_currentDevice.numInterfaces; i++) {
-      if (badusb_currentDevice.interfaceClasses[i] == 0x03) {
-        isHID = true;
-        break;
-      }
-    }
-
-    if (isHID) {
-      unsigned long now = millis();
-      if (now - badusb_lastBlinkTime >= 250) {
-        badusb_ledState = !badusb_ledState;
-        badusb_leds[0] = badusb_ledState ? CRGB::Red : CRGB::Black;
-        FastLED.show();
-        badusb_lastBlinkTime = now;
-      }
-    } else {
-      if (badusb_leds[0] != CRGB::Green) {
-        badusb_leds[0] = CRGB::Green;
-        FastLED.show();
-      }
-      badusb_ledState = true;
-    }
-  }
-}
-
-// Process a device connection (called from loop when device detected)
-void badusb_processNewDevice(uint8_t address) {
-  badusb_deviceConnected = true;
-  memset(&badusb_currentDevice, 0, sizeof(badusb_currentDevice));
-
-  usb_device_handle_t dev_hdl;
-  esp_err_t err = usb_host_device_open(badusb_client_hdl, address, &dev_hdl);
-
-  if (err == ESP_OK) {
-    const usb_device_desc_t *dev_desc;
-    if (usb_host_get_device_descriptor(dev_hdl, &dev_desc) == ESP_OK) {
-      badusb_currentDevice.vid = dev_desc->idVendor;
-      badusb_currentDevice.pid = dev_desc->idProduct;
-      badusb_currentDevice.deviceClass = dev_desc->bDeviceClass;
-      badusb_currentDevice.numInterfaces = 0;
-
-      const usb_config_desc_t *config_desc;
-      if (usb_host_get_active_config_descriptor(dev_hdl, &config_desc) == ESP_OK) {
-        int offset = 0;
-        const usb_standard_desc_t *next_desc = (const usb_standard_desc_t *)config_desc;
-
-        while (offset < config_desc->wTotalLength && badusb_currentDevice.numInterfaces < 8) {
-          next_desc = (const usb_standard_desc_t *)(((uint8_t *)config_desc) + offset);
-
-          if (next_desc->bDescriptorType == USB_B_DESCRIPTOR_TYPE_INTERFACE) {
-            const usb_intf_desc_t *intf_desc = (const usb_intf_desc_t *)next_desc;
-            badusb_currentDevice.interfaceClasses[badusb_currentDevice.numInterfaces] = intf_desc->bInterfaceClass;
-            badusb_currentDevice.numInterfaces++;
-          }
-
-          offset += next_desc->bLength;
-        }
-      }
-    }
-
-    usb_host_device_close(badusb_client_hdl, dev_hdl);
-
-    badusb_analyzeDevice(&badusb_currentDevice);
-    badusb_displayDeviceInfo(&badusb_currentDevice);
-  }
-}
-
-// Cleanup - SIMPLE: just uninstall, no callbacks to worry about
-void badusb_cleanup() {
-  // Turn off LED
-  badusb_leds[0] = CRGB::Black;
-  FastLED.show();
-
-  // Deregister client
-  if (badusb_client_hdl) {
-    usb_host_client_deregister(badusb_client_hdl);
-    badusb_client_hdl = nullptr;
-  }
-
-  // Uninstall USB host
-  usb_host_uninstall();
-
-  // Reset state
-  memset(&badusb_currentDevice, 0, sizeof(badusb_currentDevice));
-  badusb_deviceConnected = false;
-  badusb_deviceWasConnected = false;
-  badusb_ledState = false;
-  badusb_lastBlinkTime = 0;
-}
-
-void badusb_hunter_setup() {
-  DISP.setRotation(1);
-  DISP.setTextSize(SMALL_TEXT);
-  DISP.setTextColor(TFT_WHITE);
-  badusb_displayWelcome();
-
-  FastLED.addLeds<WS2812, BADUSB_LED_PIN, GRB>(badusb_leds, BADUSB_NUM_LEDS);
-  FastLED.setBrightness(50);
-  badusb_leds[0] = CRGB::Black;
-  FastLED.show();
-
-  SPEAKER.begin();
-
-  // Install USB host in SYNCHRONOUS mode (no callbacks!)
-  const usb_host_config_t host_config = {
-    .skip_phy_setup = false,
-    .intr_flags = ESP_INTR_FLAG_LEVEL1,
-  };
-
-  esp_err_t err = usb_host_install(&host_config);
-  if (err != ESP_OK) {
-    DISP.setTextColor(TFT_RED);
-    DISP.print("USB Host FAIL: ");
-    DISP.println(err, HEX);
-    delay(2000);
-    return;
-  }
-
-  // Register client in SYNCHRONOUS mode
-  const usb_host_client_config_t client_config = {
-    .is_synchronous = true,  // KEY: synchronous mode!
-    .max_num_event_msg = 5,
-    .async = {
-      .client_event_callback = nullptr,  // NO CALLBACK
-      .callback_arg = nullptr,
-    }
-  };
-
-  err = usb_host_client_register(&client_config, &badusb_client_hdl);
-  if (err != ESP_OK) {
-    DISP.setTextColor(TFT_RED);
-    DISP.print("Client reg FAIL: ");
-    DISP.println(err, HEX);
-    delay(2000);
-    usb_host_uninstall();
-    return;
-  }
-  
-  // Reset state
-  badusb_deviceConnected = false;
-  badusb_deviceWasConnected = false;
-}
-
-void badusb_hunter_loop() {
-  // Update LED
-  badusb_updateLED();
-  check_select_press();
-  // Check for exit
-  if (check_next_press()) {
-    badusb_cleanup();
-    isSwitching = true;
-    current_proc = 1;
-    return;
-  }
-
-  // Poll for connected devices by checking device address list
-  uint8_t dev_addr_list[10];
-  int num_devices = 0;
-
-  // Get list of connected device addresses
-  esp_err_t err = usb_host_device_addr_list_fill(10, dev_addr_list, &num_devices);
-
-  if (err == ESP_OK) {
-    if (num_devices > 0 && !badusb_deviceConnected) {
-      // New device detected!
-      badusb_processNewDevice(dev_addr_list[0]);
-      badusb_deviceWasConnected = true;
-    } else if (num_devices == 0 && badusb_deviceWasConnected) {
-      // Device was disconnected
-      DISP.fillScreen(BGCOLOR);
-      DISP.setTextSize(SMALL_TEXT);
-      DISP.setTextColor(TFT_YELLOW);
-      DISP.println("DISCONNECTED");
-      delay(500);
-
-      memset(&badusb_currentDevice, 0, sizeof(badusb_currentDevice));
-      badusb_deviceConnected = false;
-
-      badusb_leds[0] = CRGB::Black;
-      FastLED.show();
-      badusb_displayWelcome();
-      badusb_deviceWasConnected = false;
-    }
-  }
-
-  // Let USB host library process internal events
-  usb_host_lib_handle_events(10, nullptr);
-
-  delay(100);
-}
-
-#endif // CARDPUTER
