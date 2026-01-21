@@ -21,7 +21,7 @@ NEMO is named after the small, clever and stubborn fish in Finding Nemo. This pr
 ## Features
 
 - NEW: BadUSB Hunter (only for Cardputer and ADV Models) - Recognizes many USB peripherals via USB-C OTG and can warn you about HID devices (blinking red LED), suspicious USB Cables and BadUSB devices with multiple interface profiles including HID. Use to field-test unknown and untrustworthy USB peripherals before investigating with a computer.
-- NEW: Wireless Attack Detection: BLE Hunter and Deauth Hunter modes provide situational awareness of ongoing attacks in your area.
+- NEW: Wireless Attack Detection: BLE Hunter mode provides situational awareness of ongoing attacks in your area.
 - [TV B-Gone](http://www.righto.com/2010/11/improved-arduino-tv-b-gone.html) port (thanks to MrArm's [HAKRWATCH](https://github.com/MrARM/hakrwatch)) to shut off many infrared-controlled TVs, projectors and other devices
 - [AppleJuice](https://github.com/ECTO-1A/AppleJuice) iOS Bluetooth device pairing spam
 - Bluetooth device notification spamming for SwiftPair (Windows) and Android
@@ -113,15 +113,6 @@ Identifies presence of excessive BLE Device Advertisements
   - Adjust `BH Alert Pkts` in settings to modify the threshold for alerts.
   - Adjust "BH RSSI` in settings to adjust the sensitivity of the signal strength meter (smaller negative numbers are less sensitive, -20dBm is less sensitive than -50dBm)
 
-## Deauth Hunter
-
-Identifies the presence of WiFi Deauthentication Attacks
-
-- Usage
-  - Each session executes for 10 seconds and then the counter is reset
-  - Deauth Hunter will scan 2.4 GHz channels and sniff for WiFi Management Frames with the Deauthentication Flag set
-  - Occasional Deauthentication frames are completely normal, but more than a few per second usually indicates a WiFi Denial Of Service or Handshake Capture attack
-  - Press the SELECT button to disable the alerts temporarily and pause the channel scanning. This will allow you to freeze on the channel being used by the Deauthentication Attack.
   - The signal strength meter uses the RSSI of the most recently received deauthentication frame.
   - Use signal strength meter to help you determine the source of the signal. Lower strength is further away. Stronger, you're closer.
   - Keep hands away from the USB Port of M5Stack devices. The WiFi antenna is near the USB port and your body will block some of the signal.
