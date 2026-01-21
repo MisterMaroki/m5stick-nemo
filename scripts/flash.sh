@@ -70,8 +70,6 @@ echo -e "${YELLOW}Step 1: Compiling...${NC}"
 arduino-cli compile --fqbn $FQBN -e \
   --build-property build.partitions=no_ota \
   --build-property upload.maximum_size=3145728 \
-  --build-property compiler.c.extra_flags="-Os" \
-  --build-property compiler.cpp.extra_flags="-Os" \
   ./m5stick-nemo.ino
 
 if [ $? -ne 0 ]; then
