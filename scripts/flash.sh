@@ -1,7 +1,6 @@
 #!/bin/bash
 
 # Configuration
-PORT="/dev/tty.usbserial-5A490774111"  # Change this to your port
 FQBN="m5stack:esp32:m5stack_stickc_plus2"
 
 # Colors for output
@@ -9,6 +8,53 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
+
+# Function to find ESP32 port
+find_esp32_port() {
+  # Common ESP32 port patterns on macOS
+  local patterns=(
+    "/dev/tty.usbserial-*"
+    "/dev/tty.usbmodem*"
+    "/dev/cu.usbserial-*"
+    "/dev/cu.usbmodem*"
+  )
+  
+  local found_ports=()
+  
+  for pattern in "${patterns[@]}"; do
+    for port in $pattern; do
+      if [ -e "$port" ] && [ -c "$port" ]; then
+        found_ports+=("$port")
+      fi
+    done
+  done
+  
+  if [ ${#found_ports[@]} -eq 0 ]; then
+    echo -e "${RED}No ESP32 port found!${NC}" >&2
+    echo -e "${YELLOW}Please check:${NC}" >&2
+    echo -e "  1. ESP32 device is connected via USB" >&2
+    echo -e "  2. USB cable supports data transfer" >&2
+    echo -e "  3. Device drivers are installed" >&2
+    exit 1
+  elif [ ${#found_ports[@]} -eq 1 ]; then
+    echo "${found_ports[0]}"
+  else
+    echo -e "${YELLOW}Multiple ports found:${NC}" >&2
+    for i in "${!found_ports[@]}"; do
+      echo -e "  $((i+1)). ${found_ports[$i]}" >&2
+    done
+    echo -e "${YELLOW}Using first port: ${found_ports[0]}${NC}" >&2
+    echo "${found_ports[0]}"
+  fi
+}
+
+# Auto-detect port
+echo -e "${YELLOW}Detecting ESP32 port...${NC}"
+PORT=$(find_esp32_port)
+if [ $? -ne 0 ]; then
+  exit 1
+fi
+echo -e "${GREEN}Found port: $PORT${NC}"
 
 echo -e "${YELLOW}Step 0: Source virtual environment...${NC}"
 source bin/activate

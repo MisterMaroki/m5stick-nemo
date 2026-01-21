@@ -170,6 +170,8 @@ String platformName = "StickC";
 // 31 - BLE Hunter Alert Packets Setting
 // 32 - Alarm Settings (set alarm time)
 // 33 - Alarm Menu (enable/disable alarm)
+// 34 - Flappy Bird Game
+// 35 - Memory Info
 // 97 - Mount/UnMount SD Card on M5Stick devices, if SDCARD is declared
 
 const String contributors[] PROGMEM = {
@@ -239,6 +241,7 @@ unsigned long alarm_last_check = 0;
 #include <WebServer.h>
 
 #include "ble_hunter.h" //BLE HUNTER
+#include "flappy_bird.h" // Flappy Bird Game
                         // BADUSB HUNTER
 struct MENU {
   char name[19];
@@ -446,11 +449,12 @@ void check_menu_press() {
 
   /// MAIN MENU ///
   MENU mmenu[] = {
+    {"Flappy Bird", 34},
 #if defined(RTC)
       {TXT_CLOCK, 0},
 #endif
       {"TV-B-Gone", 13}, // We jump to the region menu first
-      {"Bluetooth", 16}, {"WiFi", 12}, {TXT_SETTINGS, 2},
+      {"Bluetooth", 16}, {"WiFi", 12},  {TXT_SETTINGS, 2},
   };
   int mmenu_size = sizeof(mmenu) / sizeof(MENU);
 
@@ -563,7 +567,7 @@ void check_menu_press() {
       {TXT_SDCARD, 97},
 #endif
       {"BH RSSI", 29},        {"BH Alert Pkts", 31}, {TXT_THEME, 23},
-      {TXT_ABOUT, 10},        {TXT_REBOOT, 98},
+      {"Memory Info", 35},    {TXT_ABOUT, 10},        {TXT_REBOOT, 98},
 #if defined(USE_EEPROM)
       {TXT_CLR_SETTINGS, 99},
 #endif
@@ -1891,6 +1895,117 @@ void check_menu_press() {
     }
   }
 
+  /// MEMORY INFO ///
+  static int memory_scroll_y = 0;
+  static const int line_height = 16; // Approximate height per line in pixels
+  
+  void memory_info_setup() {
+    rstOverride = false;
+    memory_scroll_y = 0;
+    DISP.fillScreen(BGCOLOR);
+    DISP.setTextColor(FGCOLOR, BGCOLOR);
+    DISP.setTextSize(SMALL_TEXT);
+    delay(500);
+  }
+
+  void memory_info_loop() {
+    // Refresh memory info every 2 seconds
+    static unsigned long lastUpdate = 0;
+    if (millis() - lastUpdate > 2000) {
+      lastUpdate = millis();
+      
+      // Get memory statistics
+      uint32_t freeHeap = ESP.getFreeHeap();
+      uint32_t totalHeap = ESP.getHeapSize();
+      uint32_t largestFreeBlock = ESP.getMaxAllocHeap();
+      uint32_t freeSketchSpace = ESP.getFreeSketchSpace();
+      uint32_t sketchSize = ESP.getSketchSize();
+      uint32_t flashSize = ESP.getFlashChipSize();
+      uint32_t usedHeap = (totalHeap - freeHeap) / 1024;
+      bool hasPSRAM = (ESP.getFreePsram() > 0);
+      uint32_t freePsram = 0;
+      if (hasPSRAM) {
+        freePsram = ESP.getFreePsram() / 1024;
+      }
+      
+      // Calculate total content height
+      int totalLines = hasPSRAM ? 8 : 7; // Title + 7-8 info lines
+      int totalHeight = totalLines * line_height + 20; // Extra space for controls
+      int screenHeight = 240;
+      int maxScroll = (totalHeight > screenHeight - 20) ? totalHeight - (screenHeight - 20) : 0;
+      
+      // Clamp scroll position
+      if (memory_scroll_y > maxScroll) memory_scroll_y = maxScroll;
+      if (memory_scroll_y < 0) memory_scroll_y = 0;
+      
+      DISP.fillScreen(BGCOLOR);
+      DISP.setTextColor(FGCOLOR, BGCOLOR);
+      DISP.setTextSize(SMALL_TEXT);
+      
+      // Draw content with scroll offset
+      int y = -memory_scroll_y;
+      
+      DISP.setCursor(0, y);
+      DISP.println("Memory Info:");
+      y += line_height;
+      
+      DISP.setCursor(0, y);
+      DISP.printf("Heap: %lu/%lu KB\n", freeHeap / 1024, totalHeap / 1024);
+      y += line_height;
+      
+      DISP.setCursor(0, y);
+      DISP.printf("Used: %lu KB\n", usedHeap);
+      y += line_height;
+      
+      DISP.setCursor(0, y);
+      DISP.printf("Max Block: %lu KB\n", largestFreeBlock / 1024);
+      y += line_height;
+      
+      DISP.setCursor(0, y);
+      DISP.printf("Sketch: %lu KB\n", sketchSize / 1024);
+      y += line_height;
+      
+      DISP.setCursor(0, y);
+      DISP.printf("Free Flash: %lu KB\n", freeSketchSpace / 1024);
+      y += line_height;
+      
+      DISP.setCursor(0, y);
+      DISP.printf("Flash: %lu KB\n", flashSize / 1024);
+      y += line_height;
+      
+      if (hasPSRAM) {
+        DISP.setCursor(0, y);
+        DISP.printf("PSRAM: %lu KB\n", freePsram);
+        y += line_height;
+      }
+      
+      // Show scroll controls at bottom
+      DISP.fillRect(0, 220, 135, 20, BGCOLOR);
+      DISP.setCursor(0, 220);
+      if (memory_scroll_y > 0 && memory_scroll_y < maxScroll) {
+        DISP.println("NEXT:Down HOME:Exit");
+      } else if (memory_scroll_y > 0) {
+        DISP.println("         HOME:Exit");
+      } else if (memory_scroll_y < maxScroll) {
+        DISP.println("NEXT:Scroll HOME:Exit");
+      } else {
+        DISP.println("         HOME:Exit");
+      }
+    }
+    
+    // Handle scrolling - NEXT button scrolls down
+    if (check_next_press()) {
+      memory_scroll_y += line_height * 2; // Scroll 2 lines at a time
+      delay(200);
+    }
+    
+    if (check_select_press()) {
+      rstOverride = false;
+      isSwitching = true;
+      current_proc = 2; // Return to settings menu
+    }
+  }
+
   /// WiFiSPAM ///
   void wifispam_setup() {
     // create empty SSID
@@ -2445,6 +2560,8 @@ void check_menu_press() {
       {25, ble_hunter_setup, ble_hunter_loop, "BLE Hunter"},
       {29, bh_rssi_setup, bh_rssi_loop, "BH RSSI Setting"},
       {31, bh_alert_pkts_setup, bh_alert_pkts_loop, "BH Alert Pkts Setting"},
+      {34, flappy_bird_setup, flappy_bird_loop, "Flappy Bird"},
+      {35, memory_info_setup, memory_info_loop, "Memory Info"},
 #if defined(SDCARD)
       {97, nullptr, ToggleSDCard, "SD Card"},
 #endif
