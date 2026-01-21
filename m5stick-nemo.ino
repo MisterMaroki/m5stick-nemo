@@ -168,6 +168,8 @@ String platformName = "StickC";
 // 25 - BLE Hunter
 // 29 - BLE Hunter RSSI Setting
 // 31 - BLE Hunter Alert Packets Setting
+// 32 - Alarm Settings (set alarm time)
+// 33 - Alarm Menu (enable/disable alarm)
 // 97 - Mount/UnMount SD Card on M5Stick devices, if SDCARD is declared
 
 const String contributors[] PROGMEM = {
@@ -209,6 +211,14 @@ String apMac = String("");
 bool clone_flg = false;
 float bh_max_rssi = -40;
 int bh_pkts = 0;
+// Alarm vars
+#if defined(RTC)
+int alarm_hour = 0;
+int alarm_minute = 0;
+bool alarm_enabled = false;
+bool alarm_triggered = false;
+unsigned long alarm_last_check = 0;
+#endif
 
 #if defined(USE_EEPROM)
 #include <EEPROM.h>
@@ -544,6 +554,7 @@ void check_menu_press() {
       {TXT_BRIGHT, 4},
 #if defined(RTC)
       {TXT_SET_CLOCK, 3},
+      {TXT_ALARM, 33},
 #endif
 #if defined(ROTATION)
       {TXT_ROTATION, 7},
@@ -1164,9 +1175,57 @@ void check_menu_press() {
     auto dt = StickCP2.Rtc.getDateTime();
     DISP.printf("%02d:%02d:%02d\n", dt.time.hours, dt.time.minutes,
                 dt.time.seconds);
+    // Check alarm
+    if (alarm_enabled && !alarm_triggered) {
+      if (dt.time.hours == alarm_hour && dt.time.minutes == alarm_minute) {
+        alarm_triggered = true;
+        // Trigger alarm - flash screen and beep
+        for (int i = 0; i < 10; i++) {
+          DISP.fillScreen(RED);
+          delay(200);
+          DISP.fillScreen(BGCOLOR);
+          delay(200);
+#if defined(STICK_C_PLUS)
+          SPEAKER.tone(4000);
+          delay(100);
+          SPEAKER.mute();
+#elif defined(STICK_C_PLUS2)
+          SPEAKER.tone(4000, 100);
+#endif
+        }
+      }
+    }
+    // Reset alarm trigger after 1 minute
+    if (alarm_triggered && (dt.time.minutes != alarm_minute || dt.time.hours != alarm_hour)) {
+      alarm_triggered = false;
+    }
 #else
     M5.Rtc.GetBm8563Time();
     DISP.printf("%02d:%02d:%02d\n", M5.Rtc.Hour, M5.Rtc.Minute, M5.Rtc.Second);
+    // Check alarm
+    if (alarm_enabled && !alarm_triggered) {
+      if (M5.Rtc.Hour == alarm_hour && M5.Rtc.Minute == alarm_minute) {
+        alarm_triggered = true;
+        // Trigger alarm - flash screen and beep
+        for (int i = 0; i < 10; i++) {
+          DISP.fillScreen(RED);
+          delay(200);
+          DISP.fillScreen(BGCOLOR);
+          delay(200);
+#if defined(STICK_C_PLUS)
+          SPEAKER.tone(4000);
+          delay(100);
+          SPEAKER.mute();
+#elif defined(STICK_C_PLUS2)
+          SPEAKER.tone(4000, 100);
+#endif
+        }
+      }
+    }
+    // Reset alarm trigger after 1 minute
+    if (alarm_triggered && (M5.Rtc.Minute != alarm_minute || M5.Rtc.Hour != alarm_hour)) {
+      alarm_triggered = false;
+    }
 #endif
     check_select_press();
   }
@@ -1234,6 +1293,162 @@ void check_menu_press() {
     rstOverride = false;
     isSwitching = true;
     current_proc = 0;
+  }
+
+  /// ALARM SETTING ///
+  void alarmset_setup() {
+    rstOverride = true;
+    DISP.fillScreen(BGCOLOR);
+    DISP.setCursor(0, 0);
+    DISP.println(TXT_SET_ALARM);
+    DISP.println(TXT_SET_HOUR);
+    delay(2000);
+  }
+
+  void alarmset_loop() {
+    // Set alarm hour
+    cursor = alarm_hour;
+    number_drawmenu(24);
+    while (digitalRead(M5_BUTTON_HOME) == HIGH) {
+      if (check_next_press()) {
+        cursor++;
+        cursor = cursor % 24;
+        number_drawmenu(24);
+        delay(100);
+      }
+    }
+    int hour = cursor;
+    DISP.fillScreen(BGCOLOR);
+    DISP.setCursor(0, 0);
+    DISP.println(TXT_SET_ALARM);
+    DISP.println(TXT_SET_MIN);
+    delay(2000);
+    cursor = alarm_minute;
+    number_drawmenu(60);
+    while (digitalRead(M5_BUTTON_HOME) == HIGH) {
+      if (check_next_press()) {
+        cursor++;
+        cursor = cursor % 60;
+        number_drawmenu(60);
+        delay(100);
+      }
+    }
+    int minute = cursor;
+    alarm_hour = hour;
+    alarm_minute = minute;
+    alarm_enabled = true;
+#if defined(USE_EEPROM)
+    EEPROM.write(9, alarm_hour);
+    EEPROM.write(10, alarm_minute);
+    EEPROM.write(11, alarm_enabled ? 1 : 0);
+    EEPROM.commit();
+#endif
+    DISP.fillScreen(BGCOLOR);
+    DISP.setCursor(0, 0);
+    DISP.printf("Alarm Set:\n%02d:%02d", hour, minute);
+    delay(2000);
+    rstOverride = false;
+    isSwitching = true;
+    current_proc = 2; // Return to settings menu
+  }
+
+  /// ALARM MENU ///
+  MENU alarmenu[] = {
+      {TXT_BACK, 2}, {TXT_SET_ALARM, 32}, {TXT_ALARM_ENABLED, 1}, {TXT_ALARM_DISABLED, 0},
+  };
+  int alarmenu_size = sizeof(alarmenu) / sizeof(MENU);
+
+  void alarmenu_drawmenu() {
+    DISP.setTextSize(SMALL_TEXT);
+    DISP.fillScreen(BGCOLOR);
+    DISP.setCursor(0, 0);
+    DISP.setTextColor(BGCOLOR, FGCOLOR);
+    DISP.println(" Alarm Menu  ");
+    DISP.setTextColor(FGCOLOR, BGCOLOR);
+    
+    // Show current alarm status
+    DISP.printf("Time: %02d:%02d\n", alarm_hour, alarm_minute);
+    if (alarm_enabled) {
+      DISP.println(TXT_ALARM_ENABLED);
+    } else {
+      DISP.println(TXT_ALARM_DISABLED);
+    }
+    DISP.println("");
+    
+    // Menu items
+    if (cursor == 0) {
+      DISP.setTextColor(BGCOLOR, FGCOLOR);
+    }
+    DISP.printf(" %-19s\n", TXT_BACK);
+    DISP.setTextColor(FGCOLOR, BGCOLOR);
+    
+    if (cursor == 1) {
+      DISP.setTextColor(BGCOLOR, FGCOLOR);
+    }
+    DISP.printf(" %-19s\n", TXT_SET_ALARM);
+    DISP.setTextColor(FGCOLOR, BGCOLOR);
+    
+    if (cursor == 2) {
+      DISP.setTextColor(BGCOLOR, FGCOLOR);
+    }
+    if (alarm_enabled) {
+      DISP.printf(" %-19s\n", TXT_ALARM_DISABLED);
+    } else {
+      DISP.printf(" %-19s\n", TXT_ALARM_ENABLED);
+    }
+    DISP.setTextColor(FGCOLOR, BGCOLOR);
+  }
+
+  void alarmenu_onSelect() {
+    if (cursor == 1) {
+      // Set alarm
+      rstOverride = false;
+      isSwitching = true;
+      current_proc = 32;
+    } else if (cursor == 2) {
+      // Toggle alarm enabled/disabled
+      alarm_enabled = !alarm_enabled;
+      alarm_triggered = false;
+#if defined(USE_EEPROM)
+      EEPROM.write(11, alarm_enabled ? 1 : 0);
+      EEPROM.commit();
+#endif
+      DISP.fillScreen(BGCOLOR);
+      DISP.setCursor(0, 0);
+      if (alarm_enabled) {
+        DISP.println(TXT_ALARM_ENABLED);
+      } else {
+        DISP.println(TXT_ALARM_DISABLED);
+      }
+      delay(1000);
+      cursor = 0;
+      alarmenu_drawmenu();
+    } else {
+      // Back
+      rstOverride = false;
+      isSwitching = true;
+      current_proc = 2;
+    }
+  }
+
+  void alarmenu_setup() {
+    cursor = 0;
+    rstOverride = true;
+    alarmenu_drawmenu();
+    delay(500);
+  }
+
+  void alarmenu_loop() {
+    if (check_next_press()) {
+      cursor++;
+      cursor = cursor % 3;
+      alarmenu_drawmenu();
+      delay(250);
+    }
+    if (check_select_press()) {
+      alarmenu_onSelect();
+      delay(250);
+    }
   }
 #endif // RTC
 
@@ -2101,6 +2316,11 @@ void check_menu_press() {
     Serial.printf("EEPROM  6 - BLE RSSI:   %d\n", EEPROM.read(6));
     Serial.printf("EEPROM  7 - BLE Pkts:   %d\n", EEPROM.read(7));
     Serial.printf("EEPROM  8 - DH RSSI:    %d\n", EEPROM.read(8));
+#if defined(RTC)
+    Serial.printf("EEPROM  9 - Alarm Hour: %d\n", EEPROM.read(9));
+    Serial.printf("EEPROM 10 - Alarm Min:  %d\n", EEPROM.read(10));
+    Serial.printf("EEPROM 11 - Alarm En:   %d\n", EEPROM.read(11));
+#endif
     if (EEPROM.read(0) > 3 || EEPROM.read(1) > 240 || EEPROM.read(2) > 100 ||
         EEPROM.read(3) > 1 || EEPROM.read(4) > 19 || EEPROM.read(5) > 19 ||
         EEPROM.read(6) > 100) {
@@ -2116,6 +2336,11 @@ void check_menu_press() {
       EEPROM.write(5, 1);   // BGcolor Black
       EEPROM.write(6, 40);  // -40 RSSI Max for BLE Hunter
       EEPROM.write(7, 50);  // > 50 Pkts triggers BLE Hunter Alert
+#if defined(RTC)
+      EEPROM.write(9, 0);    // Alarm hour (default 0)
+      EEPROM.write(10, 0);  // Alarm minute (default 0)
+      EEPROM.write(11, 0);  // Alarm enabled (default false)
+#endif
       EEPROM.commit();
     }
     rotation = EEPROM.read(0);
@@ -2126,6 +2351,13 @@ void check_menu_press() {
     setcolor(false, EEPROM.read(5));
     bh_max_rssi = -(EEPROM.read(6));
     bh_pkts = EEPROM.read(7);
+#if defined(RTC)
+    alarm_hour = EEPROM.read(9);
+    alarm_minute = EEPROM.read(10);
+    alarm_enabled = (EEPROM.read(11) == 1);
+    if (alarm_hour > 23) alarm_hour = 0;
+    if (alarm_minute > 59) alarm_minute = 0;
+#endif
 #endif
     getSSID();
 
@@ -2185,6 +2417,8 @@ void check_menu_press() {
       {2, smenu_setup, menu_controller_loop, "Settings Menu"},
 #if defined(RTC)
       {3, timeset_setup, timeset_loop, "Time Settings"},
+      {32, alarmset_setup, alarmset_loop, "Alarm Settings"},
+      {33, alarmenu_setup, alarmenu_loop, "Alarm Menu"},
 #endif
       {4, dmenu_setup, menu_controller_loop, "Display Menu"},
       {5, tvbgone_setup, tvbgone_loop, "TV-B-Gone"},
