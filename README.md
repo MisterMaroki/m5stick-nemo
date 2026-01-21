@@ -21,7 +21,7 @@ NEMO is named after the small, clever and stubborn fish in Finding Nemo. This pr
 ## Features
 
 - NEW: BadUSB Hunter (only for Cardputer and ADV Models) - Recognizes many USB peripherals via USB-C OTG and can warn you about HID devices (blinking red LED), suspicious USB Cables and BadUSB devices with multiple interface profiles including HID. Use to field-test unknown and untrustworthy USB peripherals before investigating with a computer.
-- NEW: Wireless Attack Detection: BLE Hunter, Deauth Hunter and PineAP Hunter modes provide situational awareness of ongoing attacks in your area.
+- NEW: Wireless Attack Detection: BLE Hunter and Deauth Hunter modes provide situational awareness of ongoing attacks in your area.
 - [TV B-Gone](http://www.righto.com/2010/11/improved-arduino-tv-b-gone.html) port (thanks to MrArm's [HAKRWATCH](https://github.com/MrARM/hakrwatch)) to shut off many infrared-controlled TVs, projectors and other devices
 - [AppleJuice](https://github.com/ECTO-1A/AppleJuice) iOS Bluetooth device pairing spam
 - Bluetooth device notification spamming for SwiftPair (Windows) and Android
@@ -129,28 +129,6 @@ Identifies the presence of WiFi Deauthentication Attacks
 - Configuration
   - Adjust `DH Alert Pkts` in settings to modify the threshold for alerts.
   - Adjust "DH RSSI` in settings to adjust the sensitivity of the signal strength meter (smaller negative numbers are less sensitive, -20dBm is less sensitive than -50dBm)
-
-## PineAP Hunter
-
-Identifies the presence of rogue access points that are broascasting many different SSIDs. This is a characteristic of the "PineAP" feature of the Hak5 WiFi Pineapple, and similar KARMA attacks.
-
-- Usage
-  - PineAP Hunter performs WiFi Scans and builds a list of all identified BSSID/SSID pairs (up to a total of 50) in memory
-  - Buttons are briefly unresponsive during WiFi Scans in PineAP Hunter mode
-  - Any BSSID advertising a number of SSIDs above the alert threshold is added to the PineAP List and the alert is triggered.
-  - Move the cursor to the desired PineAP in the list and press the SELECT button to view the SSID List. This also stops the alerts.
-  - Keep hands away from the USB Port of M5Stack devices. The WiFi antenna is near the USB port and your body will block some of the signal.
-  - Adjust the Alert SSID count for your environment if you receive false positives.
-  - The SSID list will continue to update, with the most recently seen SSID at the top of the list, with RSSI to the left of each entry
-  - Use the most recently-reported RSSI to help you determine the source of the signal. (smaller negative numbers are stronger, -20dBm is closer to you than -50dBm)
-- Configuration
-  - Adjust `PH Alert SSIDs` in settings to modify the threshold for alerts.
-- Notes
-  - Some professional access points may trigger the default value of 5. My home network, for example, broadcasts 3 different SSIDs on each access point.
-  - Due to how ESP32 WiFi Scanning works, only one SSID per BSSID (MAC Address of an access point) can be identified at a time.
-  - PineAP Hunter will have to perform no fewer than `PH Alert SSIDs` scans before it will positively identify a rogue access point. Consider keeping this value at or below 5 unless you receive false positives.
-  - For very busy areas with a PineAP advertising dozens of SSIDs, it may take several minutes to build the entire list of SSIDs used.
-  - These are all side-effects of the WiFi API for ESP32. Despite these limitations, it seems to work great, but it is not as quick to detect malicious activity as the other tools.
 
 ## Install from M5Burner
 
